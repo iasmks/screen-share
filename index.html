@@ -1,103 +1,181 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Screen Sharing with Audio, Video, and Full-Screen Option</title>
-  <style>
-    body, html {
-      height: 100%;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    #videoContainer {
-      position: relative;
-      width: 80vw;
-      max-width: 800px;
-      height: 60vh;
-      background-color: #000;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .controls {
-      margin-top: 20px;
-      display: flex;
-      justify-content: center;
-    }
-    .controls button {
-      margin: 0 10px;
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Sharing Website</title>
+    <style>
+        #localVideoContainer, #remoteVideoContainer {
+  width: 50%;
+  float: left;
+  margin: 10px;
+}
+
+video {
+  width: 80%;
+  height: auto;
+}
+
+#controls {
+  clear: both;
+  margin-top: 20px;
+}
+
+#controls button {
+  margin-right: 10px;
+}
+#localVideo {
+  width: 20%; /* Set the width as desired */
+  height: auto; /* Maintain aspect ratio */
+}
+
+    </style>
+
 </head>
 <body>
-  <h1>Screen Sharing with Audio, Video, and Full-Screen Option</h1>
-  <div id="videoContainer">
-    <video id="screenVideo" autoplay playsinline></video>
-  </div>
-  <div class="controls">
-    <button id="startButton">Start Sharing</button>
-    <button id="toggleAudioButton">Toggle Audio</button>
-    <button id="toggleVideoButton">Toggle Video</button>
-    <button id="fullscreenButton">Full Screen</button>
-  </div>
+    
+    <div id="localVideoContainer">
+        <video id="localVideo" autoplay muted></video>
+      </div>
+      <div id="remoteVideoContainer">
+        <video id="remoteVideo" autoplay></video>
+      </div>
+      <div id="controls">
+        <button id="startButton">Start Meeting</button>
+        <button id="stopButton">Stop Meeting</button>
+        <button id="screenShareButton">Share Screen</button>
+        <button id="stopScreenShareButton">Stop Screen Share</button>
+      </div>
 
-  <script>
-    let screenStream;
-    let cameraStream;
-    let audioEnabled = true;
-    let videoEnabled = true;
 
-    const screenVideo = document.getElementById('screenVideo');
-    const startButton = document.getElementById('startButton');
-    const toggleAudioButton = document.getElementById('toggleAudioButton');
-    const toggleVideoButton = document.getElementById('toggleVideoButton');
-    const fullscreenButton = document.getElementById('fullscreenButton');
 
-    startButton.addEventListener('click', async () => {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-          throw new Error('Screen sharing not supported in this browser');
-        }
 
-        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        screenVideo.srcObject = screenStream;
-      } catch (error) {
-        console.error('Error starting screen sharing:', error.message);
-      }
+
+    <script>
+let localStream;
+let remoteStream;
+let localPeerConnection;
+let remotePeerConnection;
+
+const localVideo = document.getElementById('localVideo');
+const remoteVideo = document.getElementById('remoteVideo');
+const startButton = document.getElementById('startButton');
+const stopButton = document.getElementById('stopButton');
+const screenShareButton = document.getElementById('screenShareButton');
+const stopScreenShareButton = document.getElementById('stopScreenShareButton');
+
+startButton.addEventListener('click', startMeeting);
+stopButton.addEventListener('click', stopMeeting);
+screenShareButton.addEventListener('click', startScreenShare);
+stopScreenShareButton.addEventListener('click', stopScreenShare);
+
+async function startMeeting() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+
+    // Create local peer connection
+    localPeerConnection = new RTCPeerConnection();
+    localStream.getTracks().forEach(track => localPeerConnection.addTrack(track, localStream));
+
+    // Create remote peer connection
+    remotePeerConnection = new RTCPeerConnection();
+
+    // Set up event handlers for remote peer connection
+    remotePeerConnection.ontrack = handleRemoteTrackAdded;
+    remotePeerConnection.onicecandidate = handleIceCandidateFromRemote;
+
+    // Add local stream to remote peer connection
+    localPeerConnection.onicecandidate = handleIceCandidateFromLocal;
+    localPeerConnection.onnegotiationneeded = handleNegotiationNeeded;
+
+    // Create offer
+    const offer = await localPeerConnection.createOffer();
+    await localPeerConnection.setLocalDescription(offer);
+    await remotePeerConnection.setRemoteDescription(offer);
+
+    // Create answer
+    const answer = await remotePeerConnection.createAnswer();
+    await remotePeerConnection.setLocalDescription(answer);
+    await localPeerConnection.setRemoteDescription(answer);
+  } catch (error) {
+    console.error('Error starting meeting:', error.message);
+  }
+}
+
+function stopMeeting() {
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localVideo.srcObject = null;
+  }
+  if (remoteStream) {
+    remoteStream.getTracks().forEach(track => track.stop());
+    remoteVideo.srcObject = null;
+  }
+  if (localPeerConnection) {
+    localPeerConnection.close();
+  }
+  if (remotePeerConnection) {
+    remotePeerConnection.close();
+  }
+}
+
+async function startScreenShare() {
+  try {
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    localStream.getTracks().forEach(track => {
+      track.enabled = false;
+      localPeerConnection.removeTrack(track);
     });
-
-    toggleAudioButton.addEventListener('click', () => {
-      audioEnabled = !audioEnabled;
-      screenStream.getAudioTracks().forEach(track => {
-        track.enabled = audioEnabled;
-      });
+    screenStream.getTracks().forEach(track => {
+      localPeerConnection.addTrack(track, screenStream);
     });
+  } catch (error) {
+    console.error('Error sharing screen:', error.message);
+  }
+}
 
-    toggleVideoButton.addEventListener('click', () => {
-      videoEnabled = !videoEnabled;
-      screenStream.getVideoTracks().forEach(track => {
-        track.enabled = videoEnabled;
-      });
-    });
+function stopScreenShare() {
+  localStream.getTracks().forEach(track => {
+    if (track.kind === 'video' && track.label.includes('screen')) {
+      track.stop();
+      localPeerConnection.removeTrack(track);
+    }
+  });
+}
 
-    fullscreenButton.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-          console.error('Error toggling full screen:', err.message);
-        });
-      } else {
-        document.exitFullscreen();
-      }
-    });
-  </script>
+function handleRemoteTrackAdded(event) {
+  remoteStream = event.streams[0];
+  remoteVideo.srcObject = remoteStream;
+}
+
+async function handleNegotiationNeeded() {
+  try {
+    const offer = await localPeerConnection.createOffer();
+    await localPeerConnection.setLocalDescription(offer);
+    await remotePeerConnection.setRemoteDescription(offer);
+
+    const answer = await remotePeerConnection.createAnswer();
+    await remotePeerConnection.setLocalDescription(answer);
+    await localPeerConnection.setRemoteDescription(answer);
+  } catch (error) {
+    console.error('Error handling negotiation:', error.message);
+  }
+}
+
+function handleIceCandidateFromLocal(event) {
+  if (event.candidate) {
+    remotePeerConnection.addIceCandidate(event.candidate)
+      .catch(error => console.error('Error adding ice candidate:', error.message));
+  }
+}
+
+function handleIceCandidateFromRemote(event) {
+  if (event.candidate) {
+    localPeerConnection.addIceCandidate(event.candidate)
+      .catch(error => console.error('Error adding ice candidate:', error.message));
+  }
+}
+    </script>
 </body>
 </html>
