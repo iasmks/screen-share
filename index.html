@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screen Sharing with Audio, Video, and Full-Screen Option</title>
+  <style>
+    body, html {
+      height: 100%;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #videoContainer {
+      position: relative;
+      width: 80vw;
+      max-width: 800px;
+      height: 60vh;
+      background-color: #000;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .controls button {
+      margin: 0 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Screen Sharing with Audio, Video, and Full-Screen Option</h1>
+  <div id="videoContainer">
+    <video id="screenVideo" autoplay playsinline></video>
+  </div>
+  <div class="controls">
+    <button id="startButton">Start Sharing</button>
+    <button id="toggleAudioButton">Toggle Audio</button>
+    <button id="toggleVideoButton">Toggle Video</button>
+    <button id="fullscreenButton">Full Screen</button>
+  </div>
+
+  <script>
+    let screenStream;
+    let cameraStream;
+    let audioEnabled = true;
+    let videoEnabled = true;
+
+    const screenVideo = document.getElementById('screenVideo');
+    const startButton = document.getElementById('startButton');
+    const toggleAudioButton = document.getElementById('toggleAudioButton');
+    const toggleVideoButton = document.getElementById('toggleVideoButton');
+    const fullscreenButton = document.getElementById('fullscreenButton');
+
+    startButton.addEventListener('click', async () => {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          throw new Error('Screen sharing not supported in this browser');
+        }
+
+        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        screenVideo.srcObject = screenStream;
+      } catch (error) {
+        console.error('Error starting screen sharing:', error.message);
+      }
+    });
+
+    toggleAudioButton.addEventListener('click', () => {
+      audioEnabled = !audioEnabled;
+      screenStream.getAudioTracks().forEach(track => {
+        track.enabled = audioEnabled;
+      });
+    });
+
+    toggleVideoButton.addEventListener('click', () => {
+      videoEnabled = !videoEnabled;
+      screenStream.getVideoTracks().forEach(track => {
+        track.enabled = videoEnabled;
+      });
+    });
+
+    fullscreenButton.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error('Error toggling full screen:', err.message);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    });
+  </script>
+</body>
+</html>
